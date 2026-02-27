@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SIMS.Data;
+using SIMS.Helpers;
 
 namespace SIMS.Controllers
 {
@@ -17,7 +18,8 @@ namespace SIMS.Controllers
         [HttpPost]
         public IActionResult ProcessLogin(string u, string p, int expectedRole)
         {
-            var user = db.ValidateUser(u, p);
+            string hashedPassword = PasswordHelper.HashPassword(p);
+            var user = db.ValidateUser(u, hashedPassword);
 
             if (user != null && user.RoleID == expectedRole)
             {
@@ -36,7 +38,6 @@ namespace SIMS.Controllers
             if (expectedRole == 3) return View("../Investigator/InvestigatorLogin");
             return View("../Reporter/ReporterLogin");
         }
-
         public IActionResult Logout()
         {
             HttpContext.Session.Clear();

@@ -3,6 +3,7 @@ using SIMS.Data;
 
 namespace SIMS.Controllers
 {
+    [RoleAuthorize(1)]
     public class AdminController : Controller
     {
         private readonly ApplicationDbContext db;
@@ -10,8 +11,13 @@ namespace SIMS.Controllers
         {
             db = _db;
         }
+
         public IActionResult Dashboard(string statusFilter)
         {
+            if (string.IsNullOrEmpty(HttpContext.Session.GetString("UID")))
+            {
+                return RedirectToAction("AdminLogin", "Account");
+            }
             var incidents = db.GetAllIncidents();
 
             ViewBag.PendingCount = incidents.Count(i => i.Status == "Pending");

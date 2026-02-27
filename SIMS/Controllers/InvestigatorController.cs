@@ -3,6 +3,7 @@ using SIMS.Data;
 
 namespace SIMS.Controllers
 {
+    [RoleAuthorize(3)]
     public class InvestigatorController : Controller
     {
         private readonly ApplicationDbContext db;
