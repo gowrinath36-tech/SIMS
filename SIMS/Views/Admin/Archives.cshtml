@@ -22,6 +22,13 @@
         font-size: 0.7rem;
         display: inline-block;
     }
+
+    .glass-card {
+        background: white;
+        border-radius: 16px;
+        border: 1px solid lightgray;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
 </style>
 
 <div class="container py-5">
@@ -35,7 +42,7 @@
         </a>
     </div>
 
-    <div class="glass-card p-4" style="background: white; border-radius: 16px; border: 1px solid lightgray;">
+    <div class="glass-card p-4">
         <div class="table-responsive">
             <table class="table align-middle">
                 <thead class="bg-light">
@@ -44,7 +51,7 @@
                         <th>Reporter</th>
                         <th class="text-center">Resolution Status</th>
                         <th>Category</th>
-                        <th class="text-end pe-3">Archive Date</th>
+                        <th class="text-end pe-3">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -53,10 +60,13 @@
                         @foreach (var item in Model)
                         {
                             <tr>
-                                <td class="ps-3"><strong>@item.Title</strong><br /><small>#@item.IncidentID</small></td>
+                                <td class="ps-3">
+                                    <strong>@item.Title</strong><br />
+                                    <small class="text-muted">#@item.IncidentID</small>
+                                </td>
                                 <td>@item.ReporterName</td>
                                 <td class="text-center">
-                                    @if (item.Priority == "Critical")
+                                    @if (item.Status == "Archived-Denied")
                                     {
                                         <span class="status-pill bg-denied">Denied</span>
                                     }
@@ -66,16 +76,69 @@
                                     }
                                 </td>
                                 <td><span class="badge bg-light text-dark border">@item.Category</span></td>
-                                <td class="text-end pe-3 text-muted">@item.ArchivedAt?.ToString("dd MMM yyyy")</td>
+                                <td class="text-end pe-3">
+                                    <div class="d-flex align-items-center justify-content-end gap-3">
+                                        <div class="text-end">
+                                            <small class="text-muted d-block" style="font-size: 0.75rem;">Archived On</small>
+                                            <span class="small fw-bold">@item.ArchivedAt?.ToString("dd MMM yyyy")</span>
+                                        </div>
+                                        <button onclick="restoreIncident(@item.IncidentID)"
+                                                class="btn btn-sm btn-outline-secondary"
+                                                title="Restore to Dashboard"
+                                                style="border-radius: 8px;">
+                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
                         }
                     }
                     else
                     {
-                        <tr><td colspan="5" class="text-center py-5 text-muted">No archived incidents found.</td></tr>
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                No archived incidents found.
+                            </td>
+                        </tr>
                     }
                 </tbody>
             </table>
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        function restoreIncident(id) {
+            Swal.fire({
+                title: 'Restore Incident?',
+                text: "This incident will be moved back to the active Admin Dashboard.",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#0d6efd',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, Restore'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('/Admin/Restore/' + id, function (res) {
+                        if (res.success) {
+                            Swal.fire({
+                                title: 'Restored!',
+                                text: 'Incident has been moved to dashboard.',
+                                icon: 'success',
+                                timer: 1500,
+                                showConfirmButton: false
+                            }).then(() => {
+                                location.reload();
+                            });
+                        } else {
+                            Swal.fire('Error', 'Could not restore the incident.', 'error');
+                        }
+                    });
+                }
+            });
+        }
+    </script>
+}

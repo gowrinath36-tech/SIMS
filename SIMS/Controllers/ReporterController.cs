@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SIMS.Data;
 using SIMS.Models;
-using Microsoft.AspNetCore.Hosting;
+using SIMS.Attributes;
 
 namespace SIMS.Controllers
 {

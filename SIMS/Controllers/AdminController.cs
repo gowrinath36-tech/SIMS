@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SIMS.Data;
+using SIMS.Attributes;
 
 namespace SIMS.Controllers
 {
@@ -11,18 +12,19 @@ namespace SIMS.Controllers
         {
             db = _db;
         }
-
         public IActionResult Dashboard(string statusFilter)
         {
             var incidents = db.GetAllIncidents();
 
             ViewBag.PendingCount = incidents.Count(i => i.Status == "Pending");
+
             ViewBag.InProgressCount = incidents.Count(i =>
                 i.Status == "Assigned" || i.Status == "Investigating" || i.Status == "On Hold");
-            ViewBag.ResolvedCount = incidents.Count(i =>
-                i.Status == "Resolved" || (i.Status == "Archived" && i.Priority != "Critical"));
 
-            var displayList = incidents.Where(i => i.Status != "Archived")
+            ViewBag.ResolvedCount = incidents.Count(i =>
+                i.Status == "Resolved" || i.Status == "Archived-Resolved");
+
+            var displayList = incidents.Where(i => !i.Status.StartsWith("Archived"))
                                        .OrderBy(i => i.Status == "Resolved" || i.Status == "Denied")
                                        .ThenByDescending(i => i.CreatedAt).ToList();
 
@@ -45,10 +47,14 @@ namespace SIMS.Controllers
             var all = db.GetAllIncidents();
             var data = new[]
             {
-                new { label = "Pending", count = all.Count(i => i.Status == "Pending") },
-                new { label = "In Progress", count = all.Count(i => i.Status == "Assigned" || i.Status == "Investigating" || i.Status == "On Hold") },
-                new { label = "Resolved", count = all.Count(i => i.Status == "Resolved" || (i.Status == "Archived" && i.Priority != "Critical")) }
-            };
+        new { label = "Pending", count = all.Count(i => i.Status == "Pending") },
+
+        new { label = "In Progress", count = all.Count(i =>
+            i.Status == "Assigned" || i.Status == "Investigating" || i.Status == "On Hold") },
+
+        new { label = "Resolved", count = all.Count(i =>
+            i.Status == "Resolved" || i.Status == "Archived-Resolved") }
+    };
             return Json(data);
         }
 
@@ -75,10 +81,15 @@ namespace SIMS.Controllers
         public IActionResult Archives()
         {
             var allData = db.GetAllIncidents();
-            var archivedReports = allData.Where(i => i.Status == "Archived").ToList();
+            var archivedReports = allData.Where(i => i.Status.StartsWith("Archived")).ToList();
             return View(archivedReports);
         }
-
+        [HttpPost]
+        public IActionResult Restore(int id)
+        {
+            bool success = db.UpdateIncidentStatus(id, "Restore");
+            return Json(new { success = success });
+        }
         [HttpPost]
         public IActionResult Assign(int incidentId, int investigatorId)
         {

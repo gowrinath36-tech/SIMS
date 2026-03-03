@@ -1,19 +1,26 @@
 ﻿@model List<SIMS.Models.Incident>
 @{
     Layout = "_Layout";
-    
-    var sortedModel = Model.OrderBy(i => i.Status == "Resolved" || i.Status == "Archived")
-                          .ThenByDescending(i => i.CreatedAt)
-                          .ToList();
+    ViewData["Title"] = "Investigator Workspace";
+
+    var activeTasks = Model.Where(i => i.Status != "Resolved" && !i.Status.StartsWith("Archived"))
+                          .OrderByDescending(i => i.CreatedAt).ToList();
+
+    var resolvedTasks = Model.Where(i => i.Status == "Resolved" || i.Status == "Archived-Resolved")
+                            .OrderByDescending(i => i.CreatedAt).ToList();
 }
 
 <div class="container py-5">
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
-            <h2 class="fw-bold text-slate-900">Assigned Incidents</h2>
-            <p class="text-muted mb-0">Manage and update your investigation tasks.</p>
+            <h2 class="fw-bold text-slate-900">Investigator Workspace</h2>
+            <p class="text-muted mb-0">Manage and update your assigned security incidents.</p>
         </div>
-        <div class="badge bg-dark rounded-pill px-3 py-2">Total Tasks: @Model.Count</div>
+        <div class="d-flex gap-2">
+            <span class="badge bg-primary px-3 py-2">Active: @ViewBag.ActiveCount</span>
+            <span class="badge bg-success px-3 py-2">Resolved: @ViewBag.ResolvedCount</span>
+            <span class="badge bg-dark rounded-pill px-3 py-2">Total: @ViewBag.TotalCount</span>
+        </div>
     </div>
 
     @if (TempData["Message"] != null)
@@ -24,62 +31,99 @@
         </div>
     }
 
-    @foreach (var item in sortedModel)
-    {
-        bool isDone = item.Status == "Resolved" || item.Status == "Archived";
+    <ul class="nav nav-pills mb-4 shadow-sm p-2 bg-white rounded-pill" id="taskTabs" role="tablist" style="width: fit-content;">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active rounded-pill fw-bold" id="active-tab" data-bs-toggle="pill" data-bs-target="#active-pane" type="button" role="tab">
+                <i class="bi bi-list-task me-1"></i> Active Tasks (@ViewBag.ActiveCount)
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link rounded-pill fw-bold" id="resolved-tab" data-bs-toggle="pill" data-bs-target="#resolved-pane" type="button" role="tab">
+                <i class="bi bi-check-circle me-1"></i> Resolved History (@ViewBag.ResolvedCount)
+            </button>
+        </li>
+    </ul>
 
-        <div class="card task-card mb-4 p-3 shadow-sm border-start border-4 @(isDone ? "border-success bg-light opacity-75" : "border-primary")">
-            <div class="card-body d-flex justify-content-between align-items-center">
-                <div>
-                    <h5 class="fw-bold mb-1 task-title" style="cursor: pointer; color: #4f46e5;"
-                        data-title="@item.Title"
-                        data-category="@item.Category"
-                        data-priority="@item.Priority"
-                        data-desc="@item.Description"
-                        data-id="@item.IncidentID"
-                        data-loc="@item.Location"
-                        data-rep="@item.ReporterName"
-                        data-file="@item.FilePath"
-                        onclick="openTaskModal(this)">
-                        @item.Title
-                    </h5>
-                    <div class="d-flex gap-3 align-items-center">
-                        <span class="badge bg-light text-primary border">#@item.IncidentID</span>
-                        <small class="text-muted">
-                            <i class="bi bi-clock me-1"></i> @item.CreatedAt.ToString("HH:mm, dd MMM") • 
-                            <i class="bi bi-person-circle me-1"></i> <strong>@item.ReporterName</strong>
-                        </small>
-                        <span class="badge bg-info-subtle text-info border border-info-subtle">@item.Category</span>
-                    </div>
-                </div>
+    <div class="tab-content" id="taskTabContent">
+        <div class="tab-pane fade show active" id="active-pane" role="tabpanel">
+            @if (activeTasks.Any())
+            {
+                @foreach (var item in activeTasks)
+                {
+                    <div class="card mb-4 p-3 shadow-sm border-start border-4 border-primary">
+                        <div class="card-body d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="fw-bold mb-1 task-title" style="cursor: pointer; color: #4f46e5;"
+                                    data-title="@item.Title" data-category="@item.Category" data-priority="@item.Priority"
+                                    data-desc="@item.Description" data-id="@item.IncidentID" data-loc="@item.Location"
+                                    data-rep="@item.ReporterName" data-file="@item.FilePath" onclick="openTaskModal(this)">
+                                    @item.Title
+                                </h5>
+                                <div class="d-flex gap-3 align-items-center">
+                                    <span class="badge bg-light text-primary border">#@item.IncidentID</span>
+                                    <small class="text-muted">
+                                        <i class="bi bi-clock me-1"></i> @item.CreatedAt.ToString("HH:mm, dd MMM") •
+                                        <strong>@item.ReporterName</strong>
+                                    </small>
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle">@item.Category</span>
+                                </div>
+                            </div>
 
-                <div class="d-flex align-items-center gap-3">
-                    @if (isDone)
-                    {
-                        <div class="badge bg-success px-4 py-2 rounded-pill shadow-sm">
-                            <i class="bi bi-patch-check-fill me-1"></i> Resolved
+                            <div class="d-flex align-items-center gap-3">
+                                <form asp-action="UpdateStatus" method="post" class="d-flex gap-2">
+                                    <input type="hidden" name="incId" value="@item.IncidentID" />
+                                    <select name="status" class="form-select form-select-sm">
+                                        <option value="Investigating" selected="@(item.Status == "Investigating")">Investigating</option>
+                                        <option value="On Hold" selected="@(item.Status == "On Hold")">On Hold</option>
+                                        <option value="Resolved">Mark as Resolved</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-primary btn-sm px-3">Update</button>
+                                </form>
+                                <a href="/Messages/Chat?incidentId=@item.IncidentID" class="btn btn-outline-secondary btn-sm px-3">Chat</a>
+                            </div>
                         </div>
-                    }
-                    else
-                    {
-                        <form asp-action="UpdateStatus" method="post" class="d-flex gap-2">
-                            <input type="hidden" name="incId" value="@item.IncidentID" />
-                            <select name="status" class="form-select form-select-sm">
-                                <option value="Investigating" selected="@(item.Status == "Investigating")">Investigating</option>
-                                <option value="On Hold" selected="@(item.Status == "On Hold")">On Hold</option>
-                                <option value="Resolved" selected="@(item.Status == "Resolved")">Resolved</option>
-                            </select>
-                            <button type="submit" class="btn btn-primary btn-sm px-3">Update</button>
-                        </form>
-                        <a href="/Messages/Chat?incidentId=@item.IncidentID" class="btn btn-outline-secondary btn-sm px-3">Chat</a>
-                    }
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="text-center py-5 bg-white rounded shadow-sm">
+                    <i class="bi bi-clipboard-check fs-1 text-muted"></i>
+                    <p class="text-muted mt-2">No active tasks assigned to you.</p>
                 </div>
-            </div>
+            }
         </div>
-    }
+
+        <div class="tab-pane fade" id="resolved-pane" role="tabpanel">
+            @if (ViewBag.ResolvedTasks != null)
+            {
+                var resolvedList = (List<SIMS.Models.Incident>)ViewBag.ResolvedTasks;
+                foreach (var item in resolvedList)
+                {
+                    <div class="card mb-3 border-start border-4 border-success bg-light opacity-75">
+                        <div class="card-body d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="fw-bold mb-1" style="color: #198754; cursor:pointer;"
+                                    data-title="@item.Title" data-category="@item.Category" data-priority="@item.Priority"
+                                    data-desc="@item.Description" data-id="@item.IncidentID" data-loc="@item.Location"
+                                    data-rep="@item.ReporterName" data-file="@item.FilePath"
+                                    onclick="openTaskModal(this)">
+                                    @item.Title
+                                </h5>
+                                <small class="text-muted">#@item.IncidentID • @item.Status</small>
+                            </div>
+                            <div class="badge bg-success px-4 py-2 rounded-pill shadow-sm">
+                                <i class="bi bi-patch-check-fill me-1"></i> Resolved
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
 </div>
 
-@* Modal Section *@
+@* Modal Section - Remains the same but ensures high functionality *@
 <div class="modal fade" id="incidentDetailsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content shadow-lg" style="border-radius: 15px;">
@@ -111,10 +155,8 @@
                 </div>
                 <hr />
                 <label class="text-muted small fw-bold text-uppercase">Description</label>
-                <div class="bg-light p-3 rounded mt-2 border mb-3" id="m-description" style="white-space: pre-wrap;">
-                    No description available.
-                </div>
-                
+                <div class="bg-light p-3 rounded mt-2 border mb-3" id="m-description" style="white-space: pre-wrap;"></div>
+
                 <label class="text-muted small fw-bold text-uppercase">Evidence Image</label>
                 <div id="m-evidence-container" class="mt-2 text-center bg-light p-2 rounded border">
                     <img id="m-img" src="" class="img-fluid rounded shadow-sm" style="max-height: 250px; display:none;" />
@@ -128,41 +170,45 @@
     </div>
 </div>
 
-<script>
-    function openTaskModal(element) {
-        const id = element.getAttribute('data-id');
-        const title = element.getAttribute('data-title');
-        const category = element.getAttribute('data-category');
-        const priority = element.getAttribute('data-priority');
-        const desc = element.getAttribute('data-desc');
-        const loc = element.getAttribute('data-loc');
-        const rep = element.getAttribute('data-rep');
-        const file = element.getAttribute('data-file');
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function openTaskModal(element) {
+            const id = element.getAttribute('data-id');
+            const title = element.getAttribute('data-title');
+            const category = element.getAttribute('data-category');
+            const priority = element.getAttribute('data-priority');
+            const desc = element.getAttribute('data-desc');
+            const loc = element.getAttribute('data-loc');
+            const rep = element.getAttribute('data-rep');
+            const file = element.getAttribute('data-file');
 
-        document.getElementById('m-id').innerText = 'Incident #' + id;
-        document.getElementById('m-title').innerText = title;
-        document.getElementById('m-category').innerText = category;
-        document.getElementById('m-description').innerText = desc || "No description provided.";
-        document.getElementById('m-location').innerText = (loc && loc !== "") ? loc : "Not Specified";
-        document.getElementById('m-reporter').innerText = rep;
+            document.getElementById('m-id').innerText = 'Incident #' + id;
+            document.getElementById('m-title').innerText = title;
+            document.getElementById('m-category').innerText = category;
+            document.getElementById('m-description').innerText = desc || "No description provided.";
+            document.getElementById('m-location').innerText = (loc && loc !== "") ? loc : "Not Specified";
+            document.getElementById('m-reporter').innerText = rep;
 
-        const pElement = document.getElementById('m-priority');
-        pElement.innerText = priority;
-        pElement.className = 'badge ' + (priority === 'High' || priority === 'Critical' ? 'bg-danger' : 'bg-warning text-dark');
+            const pElement = document.getElementById('m-priority');
+            pElement.innerText = priority;
+            pElement.className = 'badge ' + (priority === 'High' || priority === 'Critical' ? 'bg-danger' : 'bg-warning text-dark');
 
-        const imgElement = document.getElementById('m-img');
-        const noImgText = document.getElementById('m-no-img');
-        if (file && file !== "" && file !== "null") {
-            imgElement.src = file;
-            imgElement.style.display = 'inline-block';
-            noImgText.style.display = 'none';
-        } else {
-            imgElement.style.display = 'none';
-            noImgText.style.display = 'block';
+            const imgElement = document.getElementById('m-img');
+            const noImgText = document.getElementById('m-no-img');
+            if (file && file !== "" && file !== "null" && file !== null) {
+                imgElement.src = file;
+                imgElement.style.display = 'inline-block';
+                noImgText.style.display = 'none';
+            } else {
+                imgElement.src = '';
+                imgElement.style.display = 'none';
+                noImgText.style.display = 'block';
+            }
+
+            var modalElement = document.getElementById('incidentDetailsModal');
+            var myModal = new bootstrap.Modal(modalElement);
+            myModal.show();
         }
-
-        var modalElement = document.getElementById('incidentDetailsModal');
-        var myModal = bootstrap.Modal.getOrCreateInstance(modalElement);
-        myModal.show();
-    }
-</script>
+    </script>
+}

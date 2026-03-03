@@ -68,8 +68,9 @@ namespace SIMS.Data
                 while (rdr.Read())
                 {
                     var inc = MapIncident(rdr);
-                    if (inc.Status == "Archived")
-                        inc.Status = (inc.Priority == "Critical") ? "Denied" : "Resolved";
+                    if (inc.Status == "Archived-Denied") inc.Status = "Denied";
+                    if (inc.Status == "Archived-Resolved") inc.Status = "Resolved";
+
                     list.Add(inc);
                 }
             }
@@ -97,21 +98,45 @@ namespace SIMS.Data
         {
             using (SqlConnection conn = new SqlConnection(_connectionString))
             {
-                string sql = "UPDATE Incidents SET Status = @s WHERE IncidentID = @id";
+                string sql;
+                using (SqlCommand cmd = new SqlCommand())
+                {
+                    cmd.Connection = conn;
 
-                if (status == "Archived")
-                {
-                    sql = "UPDATE Incidents SET Status = 'Archived', ArchivedAt = GETDATE() WHERE IncidentID = @id";
+                    if (status == "Archived")
+                    {
+                        sql = @"UPDATE Incidents 
+                        SET Status = CASE 
+                            WHEN Status = 'Denied' THEN 'Archived-Denied' 
+                            ELSE 'Archived-Resolved' 
+                        END, 
+                        ArchivedAt = GETDATE() 
+                        WHERE IncidentID = @id";
+                        cmd.Parameters.AddWithValue("@id", id);
+                    }
+                    else if (status == "Restore")
+                    {
+                        sql = @"UPDATE Incidents 
+                        SET Status = CASE 
+                            WHEN Status = 'Archived-Denied' THEN 'Denied' 
+                            ELSE 'Resolved' 
+                        END, 
+                        ArchivedAt = NULL 
+                        WHERE IncidentID = @id";
+                        cmd.Parameters.AddWithValue("@id", id);
+                    }
+                    else
+                    {
+                        sql = "UPDATE Incidents SET Status = @status WHERE IncidentID = @id";
+                        cmd.Parameters.AddWithValue("@status", status);
+                        cmd.Parameters.AddWithValue("@id", id);
+                    }
+
+                    cmd.CommandText = sql;
+
+                    conn.Open();
+                    return cmd.ExecuteNonQuery() > 0;
                 }
-                else if (status == "Denied")
-                {
-                    sql = "UPDATE Incidents SET Status = 'Denied', Priority = 'Critical' WHERE IncidentID = @id";
-                }
-                SqlCommand cmd = new SqlCommand(sql, conn);
-                cmd.Parameters.AddWithValue("@s", status);
-                cmd.Parameters.AddWithValue("@id", id);
-                conn.Open();
-                return cmd.ExecuteNonQuery() > 0;
             }
         }
         public void AssignIncident(int incId, int invId)
@@ -143,10 +168,11 @@ namespace SIMS.Data
             using (SqlConnection conn = new SqlConnection(_connectionString))
             {
                 string sql = @"SELECT i.*, u1.Username as ReporterName 
-                               FROM Incidents i 
-                               LEFT JOIN Users u1 ON i.ReportedBy = u1.UserID 
-                               WHERE i.AssignedTo = @id AND i.Status != 'Archived' 
-                               ORDER BY i.CreatedAt DESC";
+                       FROM Incidents i 
+                       LEFT JOIN Users u1 ON i.ReportedBy = u1.UserID 
+                       WHERE i.AssignedTo = @id 
+                       ORDER BY i.CreatedAt DESC";
+
                 SqlCommand cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@id", investigatorId);
                 conn.Open();
